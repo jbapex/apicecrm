@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 5% 96%; /* bg-gray-100 */
+    --foreground: 224 71% 4%; /* text-gray-900 */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-size: 14px; /* Global font size adjustment */
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+.metric-card {
+  @apply bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200;
+}
+
+.status-badge {
+  @apply px-3 py-1 rounded-full text-xs font-medium capitalize whitespace-nowrap;
+}
+
+.status-agendado {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.status-compareceu {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-vendeu {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-nao_compareceu {
+  @apply bg-red-100 text-red-800;
+}
+
+.status-remarcou {
+  @apply bg-purple-100 text-purple-800;
+}
+
+.status-default {
+  @apply bg-gray-100 text-gray-800;
+}
+
+
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium transition-colors;
+}
+
+.input-field {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none;
+}
+
+.input-field-table {
+  @apply w-full px-2 py-1 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm;
+}
+
+.table-header {
+  @apply bg-gray-50 text-gray-700 font-semibold text-sm uppercase tracking-wide;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.bg-blue-100 { background-color: #DBEAFE; }
+.text-blue-600 { color: #2563EB; }
+.border-blue-500 { border-color: #3B82F6; }
+
+.bg-green-100 { background-color: #D1FAE5; }
+.text-green-600 { color: #059669; }
+.border-green-500 { border-color: #10B981; }
+
+.bg-yellow-100 { background-color: #FEF3C7; }
+.text-yellow-600 { color: #D97706; }
+.border-yellow-500 { border-color: #F59E0B; }
+
+.bg-orange-100 { background-color: #FFEDD5; }
+.text-orange-600 { color: #EA580C; }
+.border-orange-500 { border-color: #F97316; }
+
+.bg-purple-100 { background-color: #F3E8FF; }
+.text-purple-600 { color: #9333EA; }
+.border-purple-500 { border-color: #A855F7; }
+
+.bg-red-100 { background-color: #FEE2E2; }
+.text-red-600 { color: #DC2626; }
+.border-red-500 { border-color: #EF4444; }
+
+.bg-teal-100 { background-color: #CCFBF1; }
+.text-teal-600 { color: #0D9488; }
+.border-teal-500 { border-color: #14B8A6; }
+
+.bg-dots {
+  background-color: #f0f4f8;
+  background-image: radial-gradient(#dce3ec 1px, transparent 0);
+  background-size: 20px 20px;
+}
+
+.dark .bg-dots {
+  background-color: #111827;
+  background-image: radial-gradient(#374151 1px, transparent 0);
+  background-size: 20px 20px;
+}
