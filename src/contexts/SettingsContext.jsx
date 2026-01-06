@@ -306,30 +306,68 @@ export const SettingsProvider = ({ children }) => {
     setSaving(true);
   
     try {
-      const tablesToExport = ['leads', 'investments', 'lead_comments', 'message_history', 'user_settings', 'user_default_settings'];
-      const backupData = {};
+      // Lista completa de tabelas para backup
+      const tablesToExport = [
+        'leads',
+        'staged_leads',
+        'investments',
+        'lead_comments',
+        'message_history',
+        'user_settings',
+        'user_default_settings',
+        'products',
+        'flows',
+        'flow_logs'
+      ];
+      
+      const backupData = {
+        metadata: {
+          exportDate: new Date().toISOString(),
+          userId: user.id,
+          userEmail: user.email,
+          version: '1.0.0'
+        },
+        tables: {}
+      };
   
       for (const table of tablesToExport) {
-        const { data, error } = await supabase
-          .from(table)
-          .select('*')
-          .eq('user_id', user.id);
-        
-        if (error) throw new Error(`Erro ao exportar a tabela ${table}: ${error.message}`);
-        backupData[table] = data;
+        try {
+          const { data, error } = await supabase
+            .from(table)
+            .select('*')
+            .eq('user_id', user.id);
+          
+          if (error) {
+            console.warn(`Aviso ao exportar ${table}:`, error.message);
+            backupData.tables[table] = { error: error.message, data: [] };
+          } else {
+            backupData.tables[table] = data || [];
+          }
+        } catch (tableError) {
+          console.warn(`Erro ao exportar tabela ${table}:`, tableError);
+          backupData.tables[table] = { error: tableError.message, data: [] };
+        }
       }
   
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `apice_crm_backup_${new Date().toISOString().split('T')[0]}.json`;
+      const timestamp = new Date().toISOString().split('T')[0];
+      a.download = `apice_crm_backup_${timestamp}_${user.id.substring(0, 8)}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
   
-      toast({ title: "Backup completo!", description: "Seu arquivo de backup foi baixado com sucesso." });
+      const totalRecords = Object.values(backupData.tables).reduce((sum, table) => {
+        return sum + (Array.isArray(table) ? table.length : (table.data?.length || 0));
+      }, 0);
+  
+      toast({ 
+        title: "Backup completo!", 
+        description: `Seu arquivo de backup foi baixado com sucesso. ${totalRecords} registros exportados.` 
+      });
     } catch (error) {
       console.error("Erro ao exportar backup:", error);
       toast({ title: "Erro no Backup", description: error.message, variant: "destructive" });
