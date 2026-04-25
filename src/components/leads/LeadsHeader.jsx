@@ -21,7 +21,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const LeadsHeader = ({
@@ -46,13 +46,22 @@ const LeadsHeader = ({
 
   const getMonthOptions = () => {
     const options = [{ value: 'all', label: 'Todos' }];
-    const currentDate = new Date();
     for (let i = 0; i < 12; i++) {
-      const month = subMonths(currentDate, i);
+      const monthDate = new Date(2000, i, 1);
       options.push({
-        value: format(month, 'yyyy-MM'),
-        label: format(month, 'MMMM yyyy', { locale: ptBR }),
+        value: String(i + 1),
+        label: format(monthDate, 'MMMM', { locale: ptBR }),
       });
+    }
+    return options;
+  };
+
+  const getYearOptions = () => {
+    const options = [{ value: 'all', label: 'Todos' }];
+    const currentYear = new Date().getFullYear();
+    for (let i = 0; i < 5; i++) {
+      const year = currentYear - i;
+      options.push({ value: String(year), label: String(year) });
     }
     return options;
   };
@@ -69,18 +78,45 @@ const LeadsHeader = ({
           <DialogTitle>Filtros</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+              <select
+                value={filters.month}
+                onChange={(e) => setFilters({ ...filters, month: e.target.value })}
+                className="input-field"
+              >
+                {getMonthOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
+              <select
+                value={filters.year || 'all'}
+                onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+                className="input-field"
+              >
+                {getYearOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Base do mês</label>
             <select
-              value={filters.month}
-              onChange={(e) => setFilters({ ...filters, month: e.target.value })}
+              value={filters.monthMode || 'entrada'}
+              onChange={(e) => setFilters({ ...filters, monthMode: e.target.value })}
               className="input-field"
             >
-              {getMonthOptions().map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <option value="entrada">Data de Entrada</option>
+              <option value="venda">Data de Venda</option>
             </select>
           </div>
           <div>
@@ -91,7 +127,8 @@ const LeadsHeader = ({
               className="input-field"
             >
               <option value="todos">Todos</option>
-              {settings.statuses?.map(status => (
+              <option value="vendas_agrupadas">Todos status de venda</option>
+              {(settings?.statuses ?? []).map(status => (
                 <option key={status.name} value={status.name} className="capitalize">
                   {status.name.replace(/_/g, ' ')}
                 </option>
@@ -107,7 +144,7 @@ const LeadsHeader = ({
               className="input-field"
             >
               <option value="todos">Todos</option>
-              {settings.sellers?.map(seller => <option key={seller} value={seller}>{seller}</option>)}
+              {(settings?.sellers ?? []).map(seller => <option key={seller} value={seller}>{seller}</option>)}
             </select>
           </div>
 
@@ -135,7 +172,7 @@ const LeadsHeader = ({
     <>
       <div className="bg-white dark:bg-gray-800/80 rounded-lg p-4 sm:p-6 card-shadow">
         <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-grow w-full md:w-80">
+          <div className="w-full md:w-72">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
             <div className="relative flex items-center">
               <input
@@ -147,19 +184,46 @@ const LeadsHeader = ({
               />
             </div>
           </div>
-          <div className="hidden md:block">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês</label>
-            <select
-              value={filters.month}
-              onChange={(e) => setFilters({ ...filters, month: e.target.value })}
-              className="input-field"
-            >
-              {getMonthOptions().map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+          <div className="hidden md:flex gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês</label>
+              <select
+                value={filters.month}
+                onChange={(e) => setFilters({ ...filters, month: e.target.value })}
+                className="input-field"
+              >
+                {getMonthOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ano</label>
+              <select
+                value={filters.year || 'all'}
+                onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+                className="input-field"
+              >
+                {getYearOptions().map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Base</label>
+              <select
+                value={filters.monthMode || 'entrada'}
+                onChange={(e) => setFilters({ ...filters, monthMode: e.target.value })}
+                className="input-field text-xs"
+              >
+                <option value="entrada">Entrada</option>
+                <option value="venda">Venda</option>
+              </select>
+            </div>
           </div>
           <div className="hidden md:block">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
@@ -169,7 +233,7 @@ const LeadsHeader = ({
               className="input-field"
             >
               <option value="todos">Todos</option>
-              {settings.statuses?.map(status => (
+              {(settings?.statuses ?? []).map(status => (
                 <option key={status.name} value={status.name} className="capitalize">
                   {status.name.replace(/_/g, ' ')}
                 </option>
@@ -184,7 +248,7 @@ const LeadsHeader = ({
               className="input-field"
             >
               <option value="todos">Todos</option>
-              {settings.sellers?.map(seller => <option key={seller} value={seller}>{seller}</option>)}
+              {(settings?.sellers ?? []).map(seller => <option key={seller} value={seller}>{seller}</option>)}
             </select>
           </div>
           <div className="hidden md:block">
@@ -199,11 +263,27 @@ const LeadsHeader = ({
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto">
             <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
-              <Button size="icon" variant={viewMode === 'list' ? 'default' : 'ghost'} onClick={() => setViewMode('list')} className="h-8 w-8">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                onClick={() => {
+                  setViewMode('list');
+                  setFilters({ ...filters, mode: 'list' });
+                }}
+                className="h-9 px-3 flex items-center gap-1"
+              >
                 <List className="h-4 w-4" />
+                <span className="text-xs font-medium">Lista</span>
               </Button>
-              <Button size="icon" variant={viewMode === 'kanban' ? 'default' : 'ghost'} onClick={() => setViewMode('kanban')} className="h-8 w-8">
+              <Button
+                variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                onClick={() => {
+                  setViewMode('kanban');
+                  setFilters({ ...filters, mode: 'kanban' });
+                }}
+                className="h-9 px-3 flex items-center gap-1"
+              >
                 <LayoutGrid className="h-4 w-4" />
+                <span className="text-xs font-medium">Kanban</span>
               </Button>
             </div>
             <FilterDialog />

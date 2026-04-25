@@ -34,6 +34,8 @@ const LeadsContent = ({
     refetchLeads,
     loadMoreLeads,
     hasMore,
+    vendasTotals,
+    vendasTotalsLoading,
   } = leadsHook;
 
   const [selectedLeads, setSelectedLeads] = useState([]);
@@ -112,6 +114,16 @@ const LeadsContent = ({
     </div>
   );
 
+  const formatCurrency = (value) => {
+    const numberValue = Number(value) || 0;
+    return numberValue.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   const renderContent = () => {
     if (loading && leads.length === 0) {
       return (
@@ -168,6 +180,23 @@ const LeadsContent = ({
           onShowLeadDetail={onShowLeadDetail}
           lastLeadElementRef={lastLeadElementRef}
         />
+        <div className="mt-4 flex flex-col items-end gap-1">
+          <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 text-sm text-gray-700 dark:text-gray-200 flex flex-col sm:flex-row gap-2 sm:gap-6">
+            <span>
+              <span className="font-semibold">V. acumulado:&nbsp;</span>
+              {vendasTotalsLoading ? '…' : formatCurrency(vendasTotals.totalVendas)}
+            </span>
+            <span>
+              <span className="font-semibold">Ticket médio:&nbsp;</span>
+              {vendasTotalsLoading ? '…' : formatCurrency(vendasTotals.ticketMedio)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 text-right max-w-md">
+            Ao salvar um lead com status de venda, valor e data, o sistema grava também em{' '}
+            <code className="text-xs">lead_vendas</code> (uma linha por lead). Totais aqui somam por{' '}
+            <span className="whitespace-nowrap">data_venda</span> no intervalo dos filtros.
+          </p>
+        </div>
         {loading && leads.length > 0 && (
           <div className="flex justify-center items-center p-4">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />

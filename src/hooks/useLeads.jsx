@@ -1,21 +1,34 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
 import { useLeadsData } from '@/hooks/leads/useLeadsData';
 import { useLeadsFiltering } from '@/hooks/leads/useLeadsFiltering';
 import { useLeadsActions } from '@/hooks/leads/useLeadsActions';
 import useLeadsMetrics from '@/hooks/leads/useLeadsMetrics.js';
 import { useLeadsExport } from '@/hooks/leads/useLeadsExport';
 import { useLeadsUI } from '@/hooks/leads/useLeadsUI';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 export const useLeads = () => {
-  const { leads, setLeads, loading, fetchLeads, hasMore, resetAndFetch } = useLeadsData();
+  const { settings } = useSettings();
+  const {
+    leads,
+    setLeads,
+    loading,
+    fetchLeads,
+    hasMore,
+    resetAndFetch,
+    vendasTotals,
+    vendasTotalsLoading,
+  } = useLeadsData();
 
   const [filters, setFilters] = useState({
     status: 'todos',
     vendedor: 'todos',
     product: '',
     month: 'all',
+    year: 'all',
+    monthMode: 'entrada',
     dateRange: null,
+    mode: 'list',
   });
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -42,7 +55,7 @@ export const useLeads = () => {
   const { filteredLeads } = useLeadsFiltering(leads);
   const metrics = useLeadsMetrics(leads, filters);
   
-  const actions = useLeadsActions(setLeads, refetchLeads);
+  const actions = useLeadsActions(setLeads, refetchLeads, settings);
   const { exportData } = useLeadsExport(filteredLeads);
   const { getStatusIcon, getStatusText, parseDateString } = useLeadsUI();
 
@@ -64,5 +77,7 @@ export const useLeads = () => {
     parseDateString,
     loadMoreLeads,
     hasMore,
+    vendasTotals,
+    vendasTotalsLoading,
   };
 };

@@ -1,60 +1,68 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
+import { startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient.js';
 import { useAuth } from '@/contexts/SupabaseAuthContext.jsx';
 import { useToast } from '@/components/ui/use-toast';
-import { startOfMonth, endOfMonth, parse } from 'date-fns';
+import {
+  fetchLeadsForVendasMetrics,
+  fetchLeadVendasInRange,
+  mergeLeadsForLeadVendaRows,
+} from '@/lib/vendasAggregation.js';
+
+const emptyBundle = { rows: [], usedTable: false };
 
 export const useWeeklyLeads = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [payload, setPayload] = useState({
+    leads: [],
+    leadVendasBundle: emptyBundle,
+    loading: true,
+  });
 
-  const fetchLeadsForMonth = useCallback(async (monthFilter) => {
-    if (!user) {
-      setLeads([]);
-      return;
-    };
-    
-    setLoading(true);
+  const leads = payload.leads;
+  const loading = payload.loading;
+  const leadVendasBundle = payload.leadVendasBundle;
 
-    try {
-      let query = supabase
-        .from('leads')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (monthFilter && monthFilter !== 'all') {
-        const monthDate = parse(monthFilter, 'yyyy-MM', new Date());
-        const startDate = startOfMonth(monthDate);
-        const endDate = endOfMonth(monthDate);
-        query = query
-          .gte('data_entrada', startDate.toISOString().split('T')[0])
-          .lte('data_entrada', endDate.toISOString().split('T')[0]);
-      } else {
-        // If no month is specified, maybe we should not fetch anything or fetch for the current month
-        setLeads([]);
-        setLoading(false);
+  const fetchLeadsForRange = useCallback(
+    async (dateRange) => {
+      if (!user) {
+        setPayload({ leads: [], leadVendasBundle: emptyBundle, loading: false });
         return;
       }
-      
-      const { data, error } = await query;
 
-      if (error) throw error;
-      
-      setLeads(data || []);
+      // Se não houver intervalo válido, não busca nada
+      if (!dateRange?.from || !dateRange?.to) {
+        setPayload({ leads: [], leadVendasBundle: emptyBundle, loading: false });
+        return;
+      }
 
-    } catch (error) {
-      toast({
-        title: 'Erro ao buscar leads para análise',
-        description: error.message,
-        variant: 'destructive',
-      });
-      setLeads([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, toast]);
+      setPayload((p) => ({ ...p, loading: true }));
 
-  return { leads, loading, fetchLeadsForMonth };
+      try {
+        const from = startOfDay(dateRange.from);
+        const to = endOfDay(dateRange.to);
+        const data = await fetchLeadsForVendasMetrics(supabase, user.id, from, to);
+        const lv = await fetchLeadVendasInRange(supabase, user.id, from, to);
+        const vRows = lv.rows || [];
+        const bundle = { rows: vRows, usedTable: Boolean(lv.usedTable) };
+        const merged = await mergeLeadsForLeadVendaRows(supabase, user.id, data || [], vRows);
+        setPayload({
+          leads: merged || [],
+          leadVendasBundle: bundle,
+          loading: false,
+        });
+      } catch (error) {
+        toast({
+          title: 'Erro ao buscar leads para análise',
+          description: error.message,
+          variant: 'destructive',
+        });
+        setPayload({ leads: [], leadVendasBundle: emptyBundle, loading: false });
+      }
+    },
+    [user, toast]
+  );
+
+  return { leads, loading, fetchLeadsForRange, leadVendasBundle };
 };

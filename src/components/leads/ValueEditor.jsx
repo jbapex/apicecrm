@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CurrencyInput, formatCurrency, getRawValue } from '@/components/ui/input-currency';
-import { DollarSign } from 'lucide-react';
 
 const ValueEditor = ({ lead, onUpdateLead }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -63,7 +62,6 @@ const ValueEditor = ({ lead, onUpdateLead }) => {
       }}
     >
       <div className="flex items-center text-sm">
-        <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
         <span>{displayFormattedValue(lead.valor)}</span>
       </div>
     </div>

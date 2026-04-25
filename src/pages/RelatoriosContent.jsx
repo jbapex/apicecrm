@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useSettings } from '@/contexts/SettingsContext.jsx';
 import AutomaticReports from '@/components/reports/AutomaticReports';
 import { Button } from '@/components/ui/button';
+import { CRM_PATHS } from '@/constants/crmPaths';
 
 const formatCurrency = (value) => {
   if (typeof value !== 'number') return 'R$ 0,00';
@@ -245,7 +247,11 @@ const ProdutosReport = ({ data, loading }) => {
   );
 };
 
-const RelatoriosContent = ({ onNavigateToOriginDetails }) => {
+const RelatoriosContent = () => {
+  const navigate = useNavigate();
+  const onNavigateToOriginDetails = (origin, dateRange) => {
+    navigate(CRM_PATHS.relatoriosOrigem, { state: { origin, dateRange } });
+  };
   const [activeReport, setActiveReport] = useState("geral");
   
   const [date, setDate] = useState({

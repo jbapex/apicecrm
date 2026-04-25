@@ -5,7 +5,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { DollarSign, BarChart, Calendar, UserCheck, TrendingUp, Target, Percent, Coins, UserPlus, ShoppingCart, Save, Zap, Settings as SettingsIcon, Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WeekRowCard } from '@/components/week/WeekRowCard';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useWeeklyLeads } from '@/hooks/useWeeklyLeads';
 import WeeklyAnalyticsSettings from '@/components/week/WeeklyAnalyticsSettings';
@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 
 const MetricCard = ({ icon, label, value, color, format }) => {
   const Icon = icon;
@@ -102,9 +103,13 @@ const MultiSelectFilter = ({ title, options, selectedValues, onSelectionChange }
 
 const WeekContent = () => {
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { leads, loading: leadsLoading, fetchLeadsForMonth } = useWeeklyLeads();
+  const { leads, loading: leadsLoading, fetchLeadsForRange, leadVendasBundle } = useWeeklyLeads();
   const [showSettings, setShowSettings] = useState(false);
   const { settings } = useSettings();
+  const [dateRange, setDateRange] = useState(() => ({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  }));
 
   const analyticsLabels = useMemo(() => settings?.analytics_labels || {
     agendamento: 'Agendamentos',
@@ -116,11 +121,7 @@ const WeekContent = () => {
     weeklyInvestments,
     handleInvestmentChange,
     saveInvestments,
-    loading: investmentsLoading,
-    selectedMonth,
-    setSelectedMonth,
-    selectedYear,
-    setSelectedYear,
+    savingInvestments,
     monthlyMetrics,
     weeklyData,
     formatCurrency,
@@ -131,18 +132,13 @@ const WeekContent = () => {
     selectedSubOrigens,
     setSelectedSubOrigens,
     subOrigemOptions,
-  } = useWeeklyData(leads);
+  } = useWeeklyData(leads, dateRange, leadVendasBundle);
 
   useEffect(() => {
-    const monthString = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-    fetchLeadsForMonth(monthString);
-  }, [selectedYear, selectedMonth, fetchLeadsForMonth]);
+    fetchLeadsForRange(dateRange);
+  }, [dateRange, fetchLeadsForRange]);
 
-  const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(0, i).toLocaleString('pt-BR', { month: 'long' }) }));
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
-
-  if (leadsLoading || investmentsLoading) {
+  if (leadsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -179,18 +175,13 @@ const WeekContent = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mt-4">
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Mês</label>
-            <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="input-field text-sm">
-              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Ano</label>
-            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="input-field text-sm">
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Período</label>
+            <DateRangePicker
+              onDateChange={setDateRange}
+              initialRange={dateRange}
+            />
           </div>
           <MultiSelectFilter
             title="Origem"
@@ -210,9 +201,13 @@ const WeekContent = () => {
       <div className="bg-white p-3 sm:p-4 rounded-lg card-shadow">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-3">
             <h3 className="font-semibold text-base sm:text-lg text-gray-800">Desempenho Semanal</h3>
-            <Button onClick={saveInvestments} className="btn-primary flex items-center w-full sm:w-auto text-sm px-3 py-1.5">
+            <Button
+              onClick={saveInvestments}
+              disabled={savingInvestments}
+              className="btn-primary flex items-center w-full sm:w-auto text-sm px-3 py-1.5"
+            >
                 <Save className="w-4 h-4 mr-2" />
-                Salvar Investimentos
+                {savingInvestments ? 'Salvando…' : 'Salvar Investimentos'}
             </Button>
         </div>
         
@@ -291,7 +286,12 @@ const WeekContent = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="bg-white p-3 sm:p-4 rounded-lg card-shadow">
-          <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4 text-gray-800">Resultados do Mês</h3>
+          <h3 className="font-semibold text-base sm:text-lg mb-1 sm:mb-2 text-gray-800">Resultados do Período</h3>
+          <p className="text-xs text-gray-500 mb-2">
+            {dateRange?.from && dateRange?.to
+              ? `${format(dateRange.from, 'dd/MM/yy')} - ${format(dateRange.to, 'dd/MM/yy')}`
+              : 'Período não definido'}
+          </p>
           <div className="space-y-2 sm:space-y-3">
             <MetricCard icon={DollarSign} label="Investimento Total" value={monthlyMetrics.investimento} format={formatCurrency} color="blue" />
             <MetricCard icon={BarChart} label="Nº de Leads" value={monthlyMetrics.totalLeads} color="blue" />

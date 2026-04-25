@@ -10,7 +10,7 @@ import EditLeadModal from '@/components/modals/EditLeadModal';
 import TintimLeadsHeader from '@/components/tintim/TintimLeadsHeader';
 import TintimTableRow from '@/components/tintim/TintimTableRow';
 import { useTintimLeads } from '@/hooks/useTintimLeads';
-import { useLeads } from '@/hooks/useLeads.jsx';
+import { useLeads } from '@/hooks/useLeads';
 
 const TintimLeadsContent = () => {
     const { toast } = useToast();

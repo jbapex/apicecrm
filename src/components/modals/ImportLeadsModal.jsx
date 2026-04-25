@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useLeads } from '@/hooks/useLeads.jsx';
+import { useLeads } from '@/hooks/useLeads';
 import Papa from 'papaparse';
 import { Upload, FileText, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

@@ -113,6 +113,17 @@ Deno.serve(async (req) => {
         const source = leadData.source;
         const createdDate = payload.created; // "2025-08-18 às 08:00:15"
 
+        // Mapeia origem/sub-origem para caixa de entrada
+        // Regra: se vier Meta Ads, marcar como Origem = Instagram e Sub origem = Pago
+        const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : '';
+        let inboxOrigin: string | null = source || null;
+        let inboxSubOrigin: string | null = null;
+
+        if (normalizedSource === 'meta ads') {
+          inboxOrigin = 'Instagram';
+          inboxSubOrigin = 'Pago';
+        }
+
         if (!name && !phone) {
             return new Response(JSON.stringify({ error: 'Payload inválido. Nome ou telefone são obrigatórios.' }), {
                 status: 400,
@@ -122,12 +133,13 @@ Deno.serve(async (req) => {
         
         const normalizedPhone = normalizePhoneNumber(phone);
         
+        // Verifica se já existe qualquer staged lead com esse WhatsApp (qualquer status),
+        // para evitar violar unique_staged_lead_whatsapp e retornar 500
         const { data: existingStagedLead } = await supabaseAdmin
             .from('staged_leads')
             .select('id')
             .eq('user_id', userId)
             .eq('whatsapp', normalizedPhone)
-            .in('status', ['new', 'updated'])
             .maybeSingle();
 
         if (existingStagedLead) {
@@ -142,7 +154,8 @@ Deno.serve(async (req) => {
             nome: toTitleCase(name),
             whatsapp: normalizedPhone,
             email: email ? email.toLowerCase() : null,
-            origem: source || null,
+            origem: inboxOrigin,
+            sub_origem: inboxSubOrigin,
             data_recebimento: parseAndFormatTintimDate(createdDate),
             status: 'new',
             payload: payload
@@ -153,6 +166,13 @@ Deno.serve(async (req) => {
             .insert(stagedLead);
 
         if (insertError) {
+            // Duplicate key (unique_staged_lead_whatsapp): retorna 200 para não desativar o webhook
+            if (insertError.code === '23505') {
+              return new Response(JSON.stringify({ message: 'Lead já existe na caixa de entrada. Ignorando.' }), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
             throw insertError;
         }
 

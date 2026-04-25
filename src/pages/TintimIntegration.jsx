@@ -127,12 +127,24 @@ const TintimIntegration = () => {
             return;
         }
         
+        // Mapeia origem/sub-origem para caixa de entrada
+        const rawSource = leadData.source;
+        const normalizedSource = typeof rawSource === 'string' ? rawSource.trim().toLowerCase() : '';
+        let inboxOrigin = rawSource || null;
+        let inboxSubOrigin = null;
+
+        if (normalizedSource === 'meta ads') {
+            inboxOrigin = 'Instagram';
+            inboxSubOrigin = 'Pago';
+        }
+
         const stagedLead = {
             user_id: user.id,
             nome: toTitleCase(name),
             whatsapp: normalizedPhone,
             email: leadData.email ? leadData.email.toLowerCase() : null,
-            origem: leadData.source || null,
+            origem: inboxOrigin,
+            sub_origem: inboxSubOrigin,
             data_recebimento: parseAndFormatTintimDate(event.payload.created),
             status: 'new',
             payload: event.payload

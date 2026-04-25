@@ -9,13 +9,14 @@ export const useSettings = () => useContext(SettingsContext);
 
 export const systemDefaultSettings = {
   name: 'Padrão Original do Sistema',
-  origins: ['instagram', 'facebook', 'whatsapp', 'indicacao', 'site'],
+  origins: ['instagram', 'facebook', 'whatsapp', 'indicacao', 'site', 'Meta Ads'],
   sub_origins: {
     instagram: ['feed', 'stories', 'reels'],
     facebook: ['feed', 'stories'],
     whatsapp: [],
     indicacao: [],
-    site: []
+    site: [],
+    'Meta Ads': ['Pago', 'Orgânico']
   },
   statuses: [
     { name: 'agendado', color: '#3b82f6' },

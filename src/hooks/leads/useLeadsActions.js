@@ -2,8 +2,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient.js';
 import { useAuth } from '@/contexts/SupabaseAuthContext.jsx';
 import { normalizePhoneNumber, getPhoneVariations } from '@/lib/leadUtils.js';
+import { syncLeadVendaFromLead } from '@/lib/syncLeadVenda.js';
 
-export const useLeadsActions = (setLeads, refetchLeads) => {
+export const useLeadsActions = (setLeads, refetchLeads, settings) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -39,11 +40,20 @@ export const useLeadsActions = (setLeads, refetchLeads) => {
     if (error) {
       if(showToast) toast({ variant: "destructive", title: "Erro ao adicionar lead", description: error.message });
       return null;
-    } else {
-      refetchLeads();
-      if(showToast) toast({ title: "Lead adicionado!", description: "Novo lead cadastrado com sucesso." });
-      return data;
     }
+    const sync = await syncLeadVendaFromLead(supabase, user.id, data, settings);
+    refetchLeads();
+    if (showToast) {
+      if (!sync.ok && !sync.skipped) {
+        toast({
+          title: 'Lead adicionado',
+          description: 'Cadastro ok, mas a tabela de vendas não atualizou. Verifique o Supabase ou tente editar de novo.',
+        });
+      } else {
+        toast({ title: 'Lead adicionado!', description: 'Novo lead cadastrado com sucesso.' });
+      }
+    }
+    return data;
   };
 
   const updateExistingLead = async (existingLead, leadData, showToast = true) => {
@@ -58,11 +68,20 @@ export const useLeadsActions = (setLeads, refetchLeads) => {
     if (updateError) {
         if(showToast) toast({ variant: "destructive", title: "Erro ao atualizar lead", description: updateError.message });
         return null;
-    } else {
-        refetchLeads();
-        if(showToast) toast({ title: "Lead atualizado!", description: "O lead já existia e foi atualizado." });
-        return updatedLead;
     }
+    const sync = await syncLeadVendaFromLead(supabase, user.id, updatedLead, settings);
+    refetchLeads();
+    if (showToast) {
+      if (!sync.ok && !sync.skipped) {
+        toast({
+          title: 'Lead atualizado',
+          description: 'Alterações salvas, mas a tabela de vendas não sincronizou.',
+        });
+      } else {
+        toast({ title: 'Lead atualizado!', description: 'O lead já existia e foi atualizado.' });
+      }
+    }
+    return updatedLead;
   };
 
   const handleAddLead = async (leadData, showToast = true) => {
@@ -80,8 +99,20 @@ export const useLeadsActions = (setLeads, refetchLeads) => {
           toast({ variant: "destructive", title: 'Erro ao Atualizar', description: error.message });
           return { data: null, error };
       }
+      if (user) {
+        const sync = await syncLeadVendaFromLead(supabase, user.id, data, settings);
+        if (!sync.ok && !sync.skipped) {
+          toast({
+            title: 'Lead atualizado',
+            description: 'Informações salvas; tabela de vendas não sincronizou.',
+          });
+        } else {
+          toast({ title: 'Lead Atualizado!', description: 'As informações do lead foram salvas.' });
+        }
+      } else {
+        toast({ title: 'Lead Atualizado!', description: 'As informações do lead foram salvas.' });
+      }
       setLeads(prevLeads => prevLeads.map(lead => (lead.id === id ? data : lead)));
-      toast({ title: 'Lead Atualizado!', description: 'As informações do lead foram salvas.' });
       return { data, error: null };
   };
 
@@ -115,11 +146,13 @@ export const useLeadsActions = (setLeads, refetchLeads) => {
       if (error) {
           toast({ variant: "destructive", title: "Erro na importação em massa", description: error.message });
           return { success: false, createdCount: 0, createdLeads: [] };
-      } else {
-          toast({ title: "Sucesso!", description: `${createdLeads.length} leads foram importados. ${leadsData.length - createdLeads.length} já existiam.` });
-          refetchLeads();
-          return { success: true, createdCount: createdLeads.length, createdLeads };
       }
+      for (const row of createdLeads || []) {
+        await syncLeadVendaFromLead(supabase, user.id, row, settings);
+      }
+      toast({ title: "Sucesso!", description: `${createdLeads.length} leads foram importados. ${leadsData.length - createdLeads.length} já existiam.` });
+      refetchLeads();
+      return { success: true, createdCount: createdLeads.length, createdLeads };
   };
 
   const handleBulkDeleteLeads = async (leadIds) => {

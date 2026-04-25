@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toaster';
@@ -16,6 +17,7 @@ import DuplicateLeadDialog from '@/components/leads/DuplicateLeadDialog';
 import { useLeads } from '@/hooks/useLeads';
 import { useSettings } from '@/contexts/SettingsContext';
 import useDashboardMetrics from '@/hooks/useDashboardMetrics';
+import { CRM_PATHS } from '@/constants/crmPaths';
 
 const DashboardContent = lazy(() => import('@/pages/DashboardContent'));
 const LeadsContent = lazy(() => import('@/pages/LeadsContent'));
@@ -31,7 +33,7 @@ const StagedLeadsContent = lazy(() => import('@/pages/StagedLeadsContent'));
 const FollowUpFlowContent = lazy(() => import('@/pages/FollowUpFlowContent'));
 const FlowLogsContent = lazy(() => import('@/pages/FlowLogsContent'));
 const RelatoriosContent = lazy(() => import('@/pages/RelatoriosContent'));
-const OriginDetailsContent = lazy(() => import('@/pages/OriginDetailsContent'));
+const OriginDetailsPage = lazy(() => import('@/pages/OriginDetailsPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -42,13 +44,11 @@ const PageLoader = () => (
 const AppContent = () => {
   const { settings, getStatusText: settingsGetStatusText, loading: settingsLoading } = useSettings();
   const { stagedLeadsCount } = useStagedLeads();
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [showAddLead, setShowAddLead] = useState(false);
   const [showImportLeads, setShowImportLeads] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(null);
   const [showLeadDetail, setShowLeadDetail] = useState(null);
   const [duplicateLeadInfo, setDuplicateLeadInfo] = useState(null);
-  const [reportView, setReportView] = useState({ type: 'main' });
   
   const leadsHook = useLeads();
   const dashboardHook = useDashboardMetrics();
@@ -83,78 +83,6 @@ const AppContent = () => {
     setShowLeadDetail(lead);
   };
 
-  const handleNavigateToOriginDetails = (origin, dateRange) => {
-    setReportView({ type: 'originDetails', origin, dateRange });
-    setActiveTab('relatorios');
-  };
-
-  const handleBackToReports = () => {
-    setReportView({ type: 'main' });
-  };
-  
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <DashboardContent 
-                  dashboardHook={dashboardHook}
-                  stagedLeadsCount={stagedLeadsCount}
-                />;
-      case 'leads':
-        return (
-          <LeadsContent
-            leadsHook={leadsHook}
-            onShowComments={onShowComments}
-            onShowLeadDetail={onShowLeadDetail}
-            onAddNewLead={() => setShowAddLead(true)}
-          />
-        );
-      case 'agendamentos':
-        return (
-          <AgendamentosContent
-            onUpdateLead={leadsHook.handleUpdateLead}
-            getStatusIcon={leadsHook.getStatusIcon}
-            getStatusText={leadsHook.getStatusText}
-            statuses={settings?.statuses || []}
-          />
-        );
-      case 'week':
-        return <WeekContent />;
-      case 'relatorios':
-        if (reportView.type === 'originDetails') {
-          return <OriginDetailsContent 
-                    origin={reportView.origin} 
-                    dateRange={reportView.dateRange}
-                    onBack={handleBackToReports} 
-                    onShowLeadDetail={onShowLeadDetail}
-                  />;
-        }
-        return <RelatoriosContent onNavigateToOriginDetails={handleNavigateToOriginDetails} />;
-      case 'follow-up':
-        return <FollowUpContent onUpdateLead={leadsHook.handleUpdateLead} />;
-      case 'follow-up-flow':
-        return <FollowUpFlowContent />;
-      case 'follow-up-logs':
-        return <FlowLogsContent />;
-      case 'apicebot':
-        return <ApiceBotIntegration />;
-      case 'staged-leads':
-        return <StagedLeadsContent />;
-      case 'webhooks':
-        return <WebhooksIntegration />;
-      case 'tintim-webhook':
-        return <TintimIntegration />;
-      case 'tintim-leads':
-        return <TintimLeadsContent />;
-      case 'settings':
-        return <SettingsContent onImportClick={() => setShowImportLeads(true)} />;
-      default:
-        return <DashboardContent 
-                  dashboardHook={dashboardHook}
-                  stagedLeadsCount={stagedLeadsCount}
-                />;
-    }
-  };
-
   return (
     <>
       <Helmet>
@@ -163,13 +91,66 @@ const AppContent = () => {
         <link rel="manifest" href="/manifest.json" />
       </Helmet>
       <Layout
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         setShowAddLead={setShowAddLead}
         stagedLeadsCount={stagedLeadsCount}
       >
         <Suspense fallback={<PageLoader />}>
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<Navigate to={CRM_PATHS.dashboard} replace />} />
+            <Route
+              path={CRM_PATHS.dashboard}
+              element={
+                <DashboardContent
+                  dashboardHook={dashboardHook}
+                  stagedLeadsCount={stagedLeadsCount}
+                />
+              }
+            />
+            <Route
+              path={CRM_PATHS.leads}
+              element={
+                <LeadsContent
+                  leadsHook={leadsHook}
+                  onShowComments={onShowComments}
+                  onShowLeadDetail={onShowLeadDetail}
+                  onAddNewLead={() => setShowAddLead(true)}
+                />
+              }
+            />
+            <Route
+              path={CRM_PATHS.agendamentos}
+              element={
+                <AgendamentosContent
+                  onUpdateLead={leadsHook.handleUpdateLead}
+                  getStatusIcon={leadsHook.getStatusIcon}
+                  getStatusText={leadsHook.getStatusText}
+                  statuses={settings?.statuses || []}
+                />
+              }
+            />
+            <Route path={CRM_PATHS.analiseSemanal} element={<WeekContent />} />
+            <Route path={CRM_PATHS.relatorios} element={<RelatoriosContent />} />
+            <Route
+              path={CRM_PATHS.relatoriosOrigem}
+              element={<OriginDetailsPage onShowLeadDetail={onShowLeadDetail} />}
+            />
+            <Route
+              path={CRM_PATHS.followUp}
+              element={<FollowUpContent onUpdateLead={leadsHook.handleUpdateLead} />}
+            />
+            <Route path={CRM_PATHS.followUpAutomacoes} element={<FollowUpFlowContent />} />
+            <Route path={CRM_PATHS.followUpLogs} element={<FlowLogsContent />} />
+            <Route path={CRM_PATHS.caixaEntrada} element={<StagedLeadsContent />} />
+            <Route path={CRM_PATHS.integracoesApicebot} element={<ApiceBotIntegration />} />
+            <Route path={CRM_PATHS.integracoesWebhooks} element={<WebhooksIntegration />} />
+            <Route path={CRM_PATHS.integracoesTintimWebhook} element={<TintimIntegration />} />
+            <Route path={CRM_PATHS.integracoesTintimLeads} element={<TintimLeadsContent />} />
+            <Route
+              path={CRM_PATHS.configuracoes}
+              element={<SettingsContent onImportClick={() => setShowImportLeads(true)} />}
+            />
+            <Route path="*" element={<Navigate to={CRM_PATHS.dashboard} replace />} />
+          </Routes>
         </Suspense>
       </Layout>
 

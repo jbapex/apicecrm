@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Calendar, TrendingUp, UserX, BarChart3, Info, Inbox } from 'lucide-react';
 import { FunnelChart, Funnel, Tooltip, LabelList, ResponsiveContainer, Cell } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -57,6 +57,7 @@ const DashboardContent = ({ dashboardHook, stagedLeadsCount = 0 }) => {
     { name: 'Leads', value: metrics.totalLeads },
     { name: analyticsLabels.agendamento, value: metrics.agendamentos },
     { name: analyticsLabels.comparecimento, value: metrics.comparecimentos },
+    // Mesmo critério do card "Vendas" e do valor (R$): registros com data_venda no período, não só leads cuja entrada cai no período.
     { name: analyticsLabels.venda, value: metrics.vendas },
   ], [metrics, analyticsLabels]);
 
@@ -128,18 +129,20 @@ const DashboardContent = ({ dashboardHook, stagedLeadsCount = 0 }) => {
           whileHover={{ y: -5, transition: { duration: 0.2 } }}
         >
           <Card className="h-full bg-gradient-to-br from-white to-gray-50 shadow-lg">
-            <CardHeader>
+            <CardHeader className="space-y-3">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                <div>
-                  <CardTitle className="text-xl font-bold text-gray-800">Funil de Vendas</CardTitle>
-                  <CardDescription>Performance no período selecionado</CardDescription>
-                </div>
-                <div className="flex items-center text-2xl font-bold text-green-600 bg-green-100/80 px-4 py-2 rounded-lg border border-green-200">
+                <CardTitle className="text-xl font-bold text-gray-800">Funil de Vendas</CardTitle>
+                <div className="flex items-center text-2xl font-bold text-green-600 bg-green-100/80 px-4 py-2 rounded-lg border border-green-200 shrink-0">
                   <span className="flex items-center">
                     R$ {metrics.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                Vendas no período usam a mesma regra em todo o sistema: soma da tabela de vendas (data da
+                venda) mais vendas ainda só no cadastro do lead — sem duplicar. Com o tempo, prefira
+                registrar tudo na tabela de vendas.
+              </p>
             </CardHeader>
             <CardContent className="pt-0">
               {metrics.totalLeads > 0 ? (

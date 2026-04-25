@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient.js';
 import { useAuth } from '@/contexts/SupabaseAuthContext.jsx';
 import { useToast } from '@/components/ui/use-toast';
-import { useLeads } from '@/hooks/useLeads.jsx';
+import { useLeads } from '@/hooks/useLeads';
 import { format, parse, isWithinInterval, isValid } from 'date-fns';
 import { normalizePhoneNumber, getPhoneVariations } from '@/lib/leadUtils.js';
 
@@ -29,10 +29,21 @@ const parsePayload = (payload) => {
     let source = leadData.source || 'Não Rastreada';
     if (source.toLowerCase() === 'não rasteada') source = 'Não Rastreada';
 
+    // Mapeia origem/sub-origem para o fluxo de leads do Tintim
+    const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : '';
+    let originForInbox = source;
+    let subOriginForInbox = null;
+
+    if (normalizedSource === 'meta ads') {
+        originForInbox = 'Instagram';
+        subOriginForInbox = 'Pago';
+    }
+
     return {
         name: leadData.name || 'N/A',
         phone: leadData.phone || 'N/A',
-        source: source,
+        source: originForInbox,
+        sub_source: subOriginForInbox,
         created: formattedDate,
         raw_created_date: rawDate,
         location: locationString,
@@ -139,9 +150,20 @@ export const useTintimLeads = () => {
             nome: parsed.name,
             whatsapp: parsed.phone,
             origem: parsed.source,
+            sub_origem: parsed.sub_source || null,
             status: 'novo',
             data_entrada: parsed.raw_created_date ? parsed.raw_created_date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            custom_fields: { tintim_lead_info: { location: parsed.location, campaign_name: parsed.campaign_name, adset_name: parsed.adset_name, ad_name: parsed.ad_name, source: parsed.source, consolidated_at: new Date().toISOString() } }
+            custom_fields: {
+                tintim_lead_info: {
+                    location: parsed.location,
+                    campaign_name: parsed.campaign_name,
+                    adset_name: parsed.adset_name,
+                    ad_name: parsed.ad_name,
+                    source: parsed.source,
+                    sub_source: parsed.sub_source || null,
+                    consolidated_at: new Date().toISOString()
+                }
+            }
         };
 
         const createdLead = await handleAddLead(newLeadData, false);
@@ -193,9 +215,20 @@ export const useTintimLeads = () => {
                 nome: parsed.name,
                 whatsapp: parsed.phone,
                 origem: parsed.source,
+                sub_origem: parsed.sub_source || null,
                 status: 'novo',
                 data_entrada: parsed.raw_created_date ? parsed.raw_created_date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                custom_fields: { tintim_lead_info: { location: parsed.location, campaign_name: parsed.campaign_name, adset_name: parsed.adset_name, ad_name: parsed.ad_name, source: parsed.source, consolidated_at: new Date().toISOString() } }
+                custom_fields: {
+                    tintim_lead_info: {
+                        location: parsed.location,
+                        campaign_name: parsed.campaign_name,
+                        adset_name: parsed.adset_name,
+                        ad_name: parsed.ad_name,
+                        source: parsed.source,
+                        sub_source: parsed.sub_source || null,
+                        consolidated_at: new Date().toISOString()
+                    }
+                }
             };
         });
 

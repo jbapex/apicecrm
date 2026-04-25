@@ -1,40 +1,34 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { endOfMonth, startOfWeek, endOfWeek, addDays, parseISO, isValid } from 'date-fns';
+import {
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  addDays,
+  getYear,
+  startOfDay,
+  endOfDay,
+} from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useToast } from '@/components/ui/use-toast';
+import { parseLeadContactDate, parseLeadSaleOrContactDate } from '@/lib/leadSaleDate.js';
+import { getVendaStatuses, isVendaStatus } from '@/lib/vendaMetrics.js';
+import {
+  parseDataVendaDate,
+  dashboardMetricsFromLeads,
+  vendasTotaisAlinhados,
+  leadVendaLeadPk,
+} from '@/lib/vendasAggregation.js';
 
 const weekStartsOnMonday = { weekStartsOn: 1 };
 
 const normalize = (value) => (value || '').toString().toLowerCase();
 
-const buildWeeksForMonth = (year, month) => {
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = endOfMonth(firstDay);
-  let cursor = startOfWeek(firstDay, weekStartsOnMonday);
-  const weeks = [];
-
-  while (cursor <= lastDay) {
-    const weekStart = cursor;
-    const weekEnd = endOfWeek(weekStart, weekStartsOnMonday);
-    weeks.push({
-      name: `Semana ${weeks.length + 1}`,
-      startDate: weekStart < firstDay ? firstDay : weekStart,
-      endDate: weekEnd > lastDay ? lastDay : weekEnd,
-    });
-    cursor = addDays(weekEnd, 1);
-  }
-
-  return weeks;
-};
-
-const parseLeadDate = (lead) => {
-  const rawDate = lead?.custom_date_field || lead?.data_entrada || lead?.created_at;
-  if (!rawDate) return null;
-  const parsed = parseISO(rawDate);
-  return isValid(parsed) ? parsed : null;
-};
+const defaultLeadVendasBundle = { rows: [], usedTable: false };
+const EMPTY_LV_ROWS = [];
+const EMPTY_STATUS_LIST = [];
 
 const defaultMonthlyMetrics = {
   investimento: 0,
@@ -53,32 +47,73 @@ const defaultMonthlyMetrics = {
   taxaLeadVenda: 0,
 };
 
-const useWeeklyData = (leads = []) => {
+const buildWeeksForRange = (start, end) => {
+  const rangeStart = startOfDay(start);
+  const rangeEnd = endOfDay(end);
+  let cursor = startOfWeek(rangeStart, weekStartsOnMonday);
+  const weeks = [];
+
+  while (cursor <= rangeEnd) {
+    const weekStartRaw = startOfWeek(cursor, weekStartsOnMonday);
+    const weekStart = weekStartRaw < rangeStart ? rangeStart : weekStartRaw;
+    const weekEndRaw = endOfWeek(cursor, weekStartsOnMonday);
+    const weekEndCandidate = endOfDay(weekEndRaw);
+    const weekEnd = weekEndCandidate > rangeEnd ? rangeEnd : weekEndCandidate;
+    weeks.push({
+      name: `Semana ${weeks.length + 1}`,
+      startDate: weekStart,
+      endDate: weekEnd,
+    });
+    cursor = addDays(startOfDay(weekEnd), 1);
+  }
+
+  return weeks;
+};
+
+const statusInList = (leadStatus, list) =>
+  Array.isArray(list) &&
+  list.length > 0 &&
+  list.some((s) => normalize(s) === normalize(leadStatus));
+
+const useWeeklyData = (leads = [], dateRange, leadVendasBundle = defaultLeadVendasBundle) => {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { toast } = useToast();
 
   const today = useMemo(() => new Date(), []);
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedOrigens, setSelectedOrigens] = useState([]);
   const [selectedSubOrigens, setSelectedSubOrigens] = useState([]);
   const [weeklyInvestments, setWeeklyInvestments] = useState([]);
-  const [weeklyData, setWeeklyData] = useState([]);
-  const [monthlyMetrics, setMonthlyMetrics] = useState(defaultMonthlyMetrics);
-  const [loading, setLoading] = useState(true);
+  const [investmentsLoading, setInvestmentsLoading] = useState(true);
+  const [savingInvestments, setSavingInvestments] = useState(false);
+
+  const bundle = leadVendasBundle ?? defaultLeadVendasBundle;
+  const lvRows = Array.isArray(bundle.rows) ? bundle.rows : EMPTY_LV_ROWS;
+  const lvUsedTable = Boolean(bundle.usedTable);
+
+  const effectiveStart = useMemo(() => {
+    const raw = dateRange?.from ?? startOfMonth(today);
+    return startOfDay(raw);
+  }, [dateRange?.from, today]);
+
+  const effectiveEnd = useMemo(() => {
+    const raw = dateRange?.to ?? endOfMonth(effectiveStart);
+    return endOfDay(raw);
+  }, [dateRange?.to, effectiveStart]);
 
   const weeks = useMemo(
-    () => buildWeeksForMonth(selectedYear, selectedMonth),
-    [selectedYear, selectedMonth]
+    () => buildWeeksForRange(effectiveStart, effectiveEnd),
+    [effectiveStart, effectiveEnd]
   );
 
   const analyticsMappings = settings?.analytics_mappings || {};
-  const agendamentoStatuses = analyticsMappings.agendamento_statuses || [];
-  const comparecimentoStatuses = analyticsMappings.comparecimento_statuses || [];
-  const vendaStatuses = analyticsMappings.venda_statuses?.length
-    ? analyticsMappings.venda_statuses
-    : ['vendeu'];
+  const agendamentoStatuses = Array.isArray(analyticsMappings.agendamento_statuses)
+    ? analyticsMappings.agendamento_statuses
+    : EMPTY_STATUS_LIST;
+  const comparecimentoStatuses = Array.isArray(analyticsMappings.comparecimento_statuses)
+    ? analyticsMappings.comparecimento_statuses
+    : EMPTY_STATUS_LIST;
+  const vendaStatuses = useMemo(() => getVendaStatuses(settings), [settings]);
 
   const origemOptions = useMemo(() => {
     const base = settings?.origins || [];
@@ -121,23 +156,15 @@ const useWeeklyData = (leads = []) => {
     );
   }, [subOrigemOptions]);
 
-  const filteredLeads = useMemo(() => {
+  const leadsPassingOrigemFilters = useMemo(() => {
     if (!Array.isArray(leads)) return [];
-
     return leads.filter((lead) => {
-      const leadDate = parseLeadDate(lead);
-      if (!leadDate) return false;
-      if (leadDate.getMonth() + 1 !== selectedMonth || leadDate.getFullYear() !== selectedYear) {
-        return false;
-      }
-
       if (
         selectedOrigens.length > 0 &&
         !selectedOrigens.some((origin) => normalize(origin) === normalize(lead?.origem))
       ) {
         return false;
       }
-
       if (
         selectedSubOrigens.length > 0 &&
         !selectedSubOrigens.some(
@@ -146,32 +173,95 @@ const useWeeklyData = (leads = []) => {
       ) {
         return false;
       }
-
       return true;
     });
-  }, [leads, selectedMonth, selectedYear, selectedOrigens, selectedSubOrigens]);
+  }, [leads, selectedOrigens, selectedSubOrigens]);
 
-  const investmentArrayFallback = useMemo(
-    () => weeks.map(() => 0),
-    [weeks]
+  const filteredLeads = useMemo(() => {
+    const a = effectiveStart.getTime();
+    const b = effectiveEnd.getTime();
+    return leadsPassingOrigemFilters.filter((lead) => {
+      const entrada = parseLeadContactDate(lead);
+      if (!entrada) return false;
+      const t = entrada.getTime();
+      return t >= a && t <= b;
+    });
+  }, [leadsPassingOrigemFilters, effectiveStart, effectiveEnd]);
+
+  const leadById = useMemo(
+    () => new Map((leads || []).map((l) => [leadVendaLeadPk(l.id), l])),
+    [leads]
   );
+
+  const rowPassesOrigemForVendaRow = useCallback(
+    (v) => {
+      const noOriginFilter = selectedOrigens.length === 0 && selectedSubOrigens.length === 0;
+      const lead = leadById.get(leadVendaLeadPk(v.lead_id));
+      if (!lead) return noOriginFilter;
+
+      if (
+        selectedOrigens.length > 0 &&
+        !selectedOrigens.some((origin) => normalize(origin) === normalize(lead?.origem))
+      ) {
+        return false;
+      }
+      if (
+        selectedSubOrigens.length > 0 &&
+        !selectedSubOrigens.some(
+          (subOrigin) => normalize(subOrigin) === normalize(lead?.sub_origem)
+        )
+      ) {
+        return false;
+      }
+      return true;
+    },
+    [leadById, selectedOrigens, selectedSubOrigens]
+  );
+
+  /** Linhas `lead_vendas` coerentes com filtro de origem (Dashboard usa todas; aqui espelhamos o filtro da UI). */
+  const vRowsFilteredForOrigem = useMemo(() => {
+    if (selectedOrigens.length === 0 && selectedSubOrigens.length === 0) return lvRows;
+    return lvRows.filter((v) => rowPassesOrigemForVendaRow(v));
+  }, [lvRows, selectedOrigens.length, selectedSubOrigens.length, rowPassesOrigemForVendaRow]);
+
+  const dashboardDm = useMemo(
+    () =>
+      dashboardMetricsFromLeads(
+        leadsPassingOrigemFilters,
+        settings,
+        effectiveStart,
+        effectiveEnd
+      ),
+    [leadsPassingOrigemFilters, settings, effectiveStart, effectiveEnd]
+  );
+
+  /** Mesmo cálculo de vendas/valor do Dashboard e Relatórios (card “Valor Total em Vendas”). */
+  const periodVendasAlinhadas = useMemo(
+    () => vendasTotaisAlinhados(vRowsFilteredForOrigem, lvUsedTable, dashboardDm),
+    [vRowsFilteredForOrigem, lvUsedTable, dashboardDm]
+  );
+
+  const investmentArrayFallback = useMemo(() => weeks.map(() => 0), [weeks]);
 
   const loadInvestments = useCallback(async () => {
     if (!user) {
       setWeeklyInvestments(investmentArrayFallback);
-      setLoading(false);
+      setInvestmentsLoading(false);
       return;
     }
 
-    setLoading(true);
+    setInvestmentsLoading(true);
 
     try {
+      const year = getYear(effectiveStart);
+      const month = effectiveStart.getMonth() + 1;
+
       const { data, error } = await supabase
         .from('investments')
         .select('*')
         .eq('user_id', user.id)
-        .eq('year', selectedYear)
-        .eq('month', selectedMonth)
+        .eq('year', year)
+        .eq('month', month)
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
@@ -194,107 +284,136 @@ const useWeeklyData = (leads = []) => {
       });
       setWeeklyInvestments(investmentArrayFallback);
     } finally {
-      setLoading(false);
+      setInvestmentsLoading(false);
     }
-  }, [user, selectedYear, selectedMonth, weeks, investmentArrayFallback, toast]);
+  }, [user, effectiveStart, weeks, investmentArrayFallback, toast]);
 
   useEffect(() => {
     loadInvestments();
   }, [loadInvestments]);
 
-  useEffect(() => {
-    setWeeklyData(
-      weeks.map((week, index) => {
-        const leadsInWeek = filteredLeads.filter((lead) => {
-          const leadDate = parseLeadDate(lead);
-          return leadDate && leadDate >= week.startDate && leadDate <= week.endDate;
+  const weeklyData = useMemo(() => {
+    return weeks.map((week, index) => {
+      const leadsInWeek = filteredLeads.filter((lead) => {
+        const entrada = parseLeadContactDate(lead);
+        if (!entrada) return false;
+        const t = entrada.getTime();
+        return t >= week.startDate.getTime() && t <= week.endDate.getTime();
+      });
+
+      const leadsCount = leadsInWeek.length;
+
+      const agendamentos = leadsInWeek.filter(
+        (lead) =>
+          Boolean(lead?.agendamento) || statusInList(lead?.status, agendamentoStatuses)
+      ).length;
+
+      const comparecimentos = leadsInWeek.filter(
+        (lead) =>
+          Boolean(lead?.attended) || statusInList(lead?.status, comparecimentoStatuses)
+      ).length;
+
+      const saleInWeek = (lead) => {
+        const d = parseLeadSaleOrContactDate(lead);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= week.startDate.getTime() && t <= week.endDate.getTime();
+      };
+
+      const leadsVendasNoWeek = leadsPassingOrigemFilters.filter(
+        (lead) => isVendaStatus(lead.status, vendaStatuses) && saleInWeek(lead)
+      );
+      const dmWeek = {
+        leadsInRangeByEntrada: leadsInWeek,
+        leadsVendasNoPeriodo: leadsVendasNoWeek,
+      };
+
+      let vendas;
+      let valorVendas;
+      let ticketMedio;
+
+      if (lvUsedTable) {
+        const rowsInWeek = vRowsFilteredForOrigem.filter((v) => {
+          const d = parseDataVendaDate(v.data_venda);
+          return (
+            d &&
+            d.getTime() >= week.startDate.getTime() &&
+            d.getTime() <= week.endDate.getTime()
+          );
         });
-
-        const leadsCount = leadsInWeek.length;
-
-        const agendamentos = leadsInWeek.filter((lead) => {
-          if (agendamentoStatuses.length > 0) {
-            return agendamentoStatuses.some(
-              (status) => normalize(status) === normalize(lead?.status)
-            );
-          }
-          return Boolean(lead?.agendamento);
-        }).length;
-
-        const comparecimentos = leadsInWeek.filter((lead) => {
-          if (comparecimentoStatuses.length > 0) {
-            return comparecimentoStatuses.some(
-              (status) => normalize(status) === normalize(lead?.status)
-            );
-          }
-          return Boolean(lead?.attended);
-        }).length;
-
-        const vendasLeads = leadsInWeek.filter((lead) =>
-          vendaStatuses.some((status) => normalize(status) === normalize(lead?.status))
+        const vtWeek = vendasTotaisAlinhados(rowsInWeek, true, dmWeek);
+        vendas = vtWeek.vendas;
+        valorVendas = vtWeek.valorTotal;
+        ticketMedio = vendas > 0 ? valorVendas / vendas : 0;
+      } else {
+        const dmWeekFull = dashboardMetricsFromLeads(
+          leadsPassingOrigemFilters,
+          settings,
+          week.startDate,
+          week.endDate
         );
+        const vtWeek = vendasTotaisAlinhados(EMPTY_LV_ROWS, false, dmWeekFull);
+        vendas = vtWeek.vendas;
+        valorVendas = vtWeek.valorTotal;
+        ticketMedio = vendas > 0 ? valorVendas / vendas : 0;
+      }
 
-        const vendas = vendasLeads.length;
-        const valorVendas = vendasLeads.reduce(
-          (sum, lead) => sum + (Number(lead?.valor) || 0),
-          0
-        );
-        const ticketMedio = vendas > 0 ? valorVendas / vendas : 0;
+      const weekInvestment = Number(weeklyInvestments[index]) || 0;
+      const roas = weekInvestment > 0 ? valorVendas / weekInvestment : 0;
 
-        const weekInvestment = Number(weeklyInvestments[index]) || 0;
-        const roas = weekInvestment > 0 ? valorVendas / weekInvestment : 0;
+      const taxaLeadAgendamento = leadsCount > 0 ? agendamentos / leadsCount : 0;
+      const taxaAgendamentoComparecimento =
+        agendamentos > 0 ? comparecimentos / agendamentos : 0;
+      const taxaComparecimentoVenda = comparecimentos > 0 ? vendas / comparecimentos : 0;
+      const taxaLeadVenda = leadsCount > 0 ? vendas / leadsCount : 0;
 
-        const taxaLeadAgendamento = leadsCount > 0 ? agendamentos / leadsCount : 0;
-        const taxaAgendamentoComparecimento =
-          agendamentos > 0 ? comparecimentos / agendamentos : 0;
-        const taxaComparecimentoVenda = comparecimentos > 0 ? vendas / comparecimentos : 0;
-        const taxaLeadVenda = leadsCount > 0 ? vendas / leadsCount : 0;
-
-        return {
-          id: `${selectedYear}-${selectedMonth}-week-${index + 1}`,
-          name: week.name,
-          startDate: week.startDate,
-          endDate: week.endDate,
-          leads: leadsCount,
-          agendamentos,
-          comparecimentos,
-          vendas,
-          valorVendas,
-          ticketMedio,
-          roas,
-          taxaLeadAgendamento,
-          taxaAgendamentoComparecimento,
-          taxaComparecimentoVenda,
-          taxaLeadVenda,
-          weeklyInvestment: weekInvestment,
-          leadsRaw: leadsInWeek,
-        };
-      })
-    );
+      return {
+        id: `${getYear(week.startDate)}-week-${index + 1}`,
+        name: week.name,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        leads: leadsCount,
+        agendamentos,
+        comparecimentos,
+        vendas,
+        valorVendas,
+        ticketMedio,
+        roas: Number.isFinite(roas) ? roas : 0,
+        taxaLeadAgendamento,
+        taxaAgendamentoComparecimento,
+        taxaComparecimentoVenda,
+        taxaLeadVenda,
+        weeklyInvestment: weekInvestment,
+        leadsRaw: leadsInWeek,
+      };
+    });
   }, [
     weeks,
     filteredLeads,
+    leadsPassingOrigemFilters,
     weeklyInvestments,
     agendamentoStatuses,
     comparecimentoStatuses,
     vendaStatuses,
-    selectedMonth,
-    selectedYear,
+    vRowsFilteredForOrigem,
+    lvUsedTable,
+    settings,
   ]);
 
-  useEffect(() => {
+  const monthlyMetrics = useMemo(() => {
     const totals = weeklyData.reduce(
       (acc, week) => {
         acc.totalLeads += week.leads;
         acc.agendamentos += week.agendamentos;
         acc.comparecimentos += week.comparecimentos;
-        acc.vendas += week.vendas;
-        acc.valorVendas += week.valorVendas;
         acc.investimento += week.weeklyInvestment;
         return acc;
       },
       { ...defaultMonthlyMetrics }
     );
+
+    totals.vendas = periodVendasAlinhadas.vendas;
+    totals.valorVendas = periodVendasAlinhadas.valorTotal;
 
     totals.ticketMedio = totals.vendas > 0 ? totals.valorVendas / totals.vendas : 0;
     totals.custoPorLead = totals.totalLeads > 0 ? totals.investimento / totals.totalLeads : 0;
@@ -308,8 +427,8 @@ const useWeeklyData = (leads = []) => {
       totals.comparecimentos > 0 ? totals.vendas / totals.comparecimentos : 0;
     totals.taxaLeadVenda = totals.totalLeads > 0 ? totals.vendas / totals.totalLeads : 0;
 
-    setMonthlyMetrics(totals);
-  }, [weeklyData]);
+    return totals;
+  }, [weeklyData, periodVendasAlinhadas]);
 
   const handleInvestmentChange = useCallback((index, value) => {
     setWeeklyInvestments((prev) => {
@@ -329,10 +448,13 @@ const useWeeklyData = (leads = []) => {
       return;
     }
 
+    const periodYear = getYear(effectiveStart);
+    const periodMonth = effectiveStart.getMonth() + 1;
+
     const payload = {
       user_id: user.id,
-      year: selectedYear,
-      month: selectedMonth,
+      year: periodYear,
+      month: periodMonth,
       updated_at: new Date().toISOString(),
     };
 
@@ -340,7 +462,7 @@ const useWeeklyData = (leads = []) => {
       payload[`week${index + 1}_investment`] = Number(weeklyInvestments[index]) || 0;
     });
 
-    setLoading(true);
+    setSavingInvestments(true);
 
     try {
       const { error } = await supabase
@@ -361,9 +483,9 @@ const useWeeklyData = (leads = []) => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setSavingInvestments(false);
     }
-  }, [user, selectedYear, selectedMonth, weeks, weeklyInvestments, toast]);
+  }, [user, effectiveStart, weeks, weeklyInvestments, toast]);
 
   const formatCurrency = useCallback((value = 0) => {
     const numberValue = Number(value) || 0;
@@ -384,11 +506,8 @@ const useWeeklyData = (leads = []) => {
     weeklyInvestments: weeks.map((_, index) => weeklyInvestments[index] || 0),
     handleInvestmentChange,
     saveInvestments,
-    loading,
-    selectedMonth,
-    setSelectedMonth,
-    selectedYear,
-    setSelectedYear,
+    investmentsLoading,
+    savingInvestments,
     monthlyMetrics,
     weeklyData,
     formatCurrency,
